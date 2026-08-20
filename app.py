@@ -1,8 +1,7 @@
 import os
 import pandas as pd
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
 st.set_page_config(page_title="Telemetry Engineer AI", layout="wide")
 st.title("🏎️ Track Telemetry AI Assistant")
@@ -14,7 +13,8 @@ if not api_key:
     st.error("⚠️ Clé API Gemini manquante. Ajoute GEMINI_API_KEY dans les Secrets Streamlit.")
     st.stop()
 
-client = genai.Client(api_key=api_key)
+# Configuration du SDK Gemini
+genai.configure(api_key=api_key)
 
 st.sidebar.header("Données de télémétrie")
 uploaded_files = st.sidebar.file_uploader(
@@ -69,25 +69,14 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
-            models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
-            success = False
-            
-            for model_name in models_to_try:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=prompt_content,
-                        config=types.GenerateContentConfig(
-                            system_instruction=SYSTEM_INSTRUCTION,
-                            temperature=0.2,
-                        )
-                    )
-                    st.markdown(response.text)
-                    st.session_state.chat_history.append({"role": "assistant", "content": response.text})
-                    success = True
-                    break
-                except Exception:
-                    continue
-            
-            if not success:
-                st.error("Impossible de contacter le modèle Gemini. Vérifie que la clé API dans les secrets Streamlit est correcte et active.")
+            try:
+                # Utilisation du modèle stable gemini-1.5-flash
+                model = genai.GenerativeModel(
+                    model_name="gemini-1.5-flash",
+                    system_instruction=SYSTEM_INSTRUCTION
+                )
+                response = model.generate_content(prompt_content)
+                st.markdown(response.text)
+                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"Erreur d'API : {e}")
