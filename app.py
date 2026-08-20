@@ -62,7 +62,6 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
     st.chat_message("user").markdown(user_prompt)
     st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
-    # Construction du prompt selon la présence de CSV
     if data_summary:
         prompt_content = f"Données de télémétrie actuelles :\n{data_summary}\n\nQuestion du pilote : {user_prompt}"
     else:
@@ -70,23 +69,13 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
-            try:
-                # Utilisation du modèle gemini-2.0-flash
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=prompt_content,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        temperature=0.2,
-                    )
-                )
-                st.markdown(response.text)
-                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                # Fallback sur gemini-1.5-flash si le v2 n'est pas disponible sur ta clé
+            models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+            success = False
+            
+            for model_name in models_to_try:
                 try:
                     response = client.models.generate_content(
-                        model="gemini-1.5-flash",
+                        model=model_name,
                         contents=prompt_content,
                         config=types.GenerateContentConfig(
                             system_instruction=SYSTEM_INSTRUCTION,
@@ -95,5 +84,10 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
                     )
                     st.markdown(response.text)
                     st.session_state.chat_history.append({"role": "assistant", "content": response.text})
-                except Exception as err:
-                    st.error(f"Erreur d'analyse : {err}")
+                    success = True
+                    break
+                except Exception:
+                    continue
+            
+            if not success:
+                st.error("Impossible de contacter le modèle Gemini. Vérifie que la clé API dans les secrets Streamlit est correcte et active.")
