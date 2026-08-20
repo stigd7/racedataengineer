@@ -1,20 +1,21 @@
 import os
 import pandas as pd
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 st.set_page_config(page_title="Telemetry Engineer AI", layout="wide")
 st.title("🏎️ Track Telemetry AI Assistant")
 
-# Clé API récupérée depuis les secrets de Streamlit
+# Récupération de la clé API depuis Streamlit Secrets
 api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
 
 if not api_key:
     st.error("⚠️ Clé API Gemini manquante. Ajoute GEMINI_API_KEY dans les Secrets Streamlit.")
     st.stop()
 
-# Configuration de la clé
-genai.configure(api_key=api_key)
+# Initialisation du client officiel Google GenAI
+client = genai.Client(api_key=api_key)
 
 st.sidebar.header("Données de télémétrie")
 uploaded_files = st.sidebar.file_uploader(
@@ -52,7 +53,7 @@ Si aucun fichier n'est téléversé, tu échanges normalement avec le pilote sur
 
 st.subheader("Analyse & Discussion")
 
-# Affichage de l'historique
+# Affichage de l'historique de chat
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -69,33 +70,17 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
-            # Liste des noms de modèles possibles selon l'activation de l'API
-            candidate_models = [
-                "gemini-1.5-flash-latest",
-                "gemini-1.5-flash",
-                "gemini-1.5-pro-latest",
-                "gemini-1.5-pro",
-                "gemini-pro"
-            ]
-            
-            response_text = None
-            last_error = None
-
-            for m_name in candidate_models:
-                try:
-                    model = genai.GenerativeModel(
-                        model_name=m_name,
-                        system_instruction=SYSTEM_INSTRUCTION
+            try:
+                # Utilisation du modèle gemini-2.5-flash
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt_content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.2,
                     )
-                    res = model.generate_content(prompt_content)
-                    response_text = res.text
-                    break
-                except Exception as err:
-                    last_error = err
-                    continue
-
-            if response_text:
-                st.markdown(response_text)
-                st.session_state.chat_history.append({"role": "assistant", "content": response_text})
-            else:
-                st.error(f"Erreur d'accès aux modèles Gemini : {last_error}")
+                )
+                st.markdown(response.text)
+                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"Erreur lors de la réponse de l'assistant : {e}")
