@@ -13,7 +13,7 @@ if not api_key:
     st.error("⚠️ Clé API Gemini manquante. Ajoute GEMINI_API_KEY dans les Secrets Streamlit.")
     st.stop()
 
-# Configuration du SDK Gemini
+# Configuration de la clé
 genai.configure(api_key=api_key)
 
 st.sidebar.header("Données de télémétrie")
@@ -69,14 +69,33 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
-            try:
-                # Utilisation du modèle stable gemini-1.5-flash
-                model = genai.GenerativeModel(
-                    model_name="gemini-1.5-flash",
-                    system_instruction=SYSTEM_INSTRUCTION
-                )
-                response = model.generate_content(prompt_content)
-                st.markdown(response.text)
-                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                st.error(f"Erreur d'API : {e}")
+            # Liste des noms de modèles possibles selon l'activation de l'API
+            candidate_models = [
+                "gemini-1.5-flash-latest",
+                "gemini-1.5-flash",
+                "gemini-1.5-pro-latest",
+                "gemini-1.5-pro",
+                "gemini-pro"
+            ]
+            
+            response_text = None
+            last_error = None
+
+            for m_name in candidate_models:
+                try:
+                    model = genai.GenerativeModel(
+                        model_name=m_name,
+                        system_instruction=SYSTEM_INSTRUCTION
+                    )
+                    res = model.generate_content(prompt_content)
+                    response_text = res.text
+                    break
+                except Exception as err:
+                    last_error = err
+                    continue
+
+            if response_text:
+                st.markdown(response_text)
+                st.session_state.chat_history.append({"role": "assistant", "content": response_text})
+            else:
+                st.error(f"Erreur d'accès aux modèles Gemini : {last_error}")
