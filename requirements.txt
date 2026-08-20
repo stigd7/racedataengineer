@@ -1,4 +1,5 @@
 streamlit
-google-genai
 pandas
+numpy
 plotly
+google-genai
