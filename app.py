@@ -53,7 +53,7 @@ Si aucun fichier n'est téléversé, tu échanges normalement avec le pilote sur
 
 st.subheader("Analyse & Discussion")
 
-# Affichage de l'historique de chat
+# Affichage de l'historique
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -71,9 +71,9 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
             try:
-                # Utilisation du modèle gemini-2.5-flash
+                # Utilisation de la référence officielle de modèle
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-2.0-flash",
                     contents=prompt_content,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_INSTRUCTION,
@@ -83,4 +83,4 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
                 st.markdown(response.text)
                 st.session_state.chat_history.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error(f"Erreur lors de la réponse de l'assistant : {e}")
+                st.error(f"Erreur lors de l'appel API : {e}")
