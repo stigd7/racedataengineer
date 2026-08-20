@@ -15,6 +15,28 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+def load_aim_csv(file):
+    """Lit un fichier CSV AiM Race Studio en sautant les métadonnées de l'en-tête."""
+    # Détection automatique de la ligne où commencent les vraies données/colonnes
+    file.seek(0)
+    lines = [file.readline().decode('utf-8', errors='ignore') for _ in range(50)]
+    
+    header_line_idx = 0
+    for idx, line in enumerate(lines):
+        # Recherche d'une ligne contenant des mots-clés typiques de télémétrie ou GPS
+        if any(keyword in line.lower() for keyword in ['time', 'lat', 'speed', 'vitesse', 'gps', 'dist']):
+            header_line_idx = idx
+            break
+
+    file.seek(0)
+    # Essai de lecture avec virgule ou point-virgule
+    try:
+        df = pd.read_csv(file, skiprows=header_line_idx)
+    except Exception:
+        file.seek(0)
+        df = pd.read_csv(file, skiprows=header_line_idx, sep=';')
+    return df
+
 # ---------------------------------------------------------
 # Sidebar : Téléversement
 # ---------------------------------------------------------
@@ -33,15 +55,18 @@ if uploaded_files:
     summaries = []
     for file in uploaded_files:
         try:
-            df = pd.read_csv(file)
+            df = load_aim_csv(file)
             
-            # Recherche automatique des colonnes GPS
-            lat_col = next((c for c in df.columns if c.lower() in ['lat', 'latitude', 'gps_lat']), None)
-            lon_col = next((c for c in df.columns if c.lower() in ['lon', 'long', 'longitude', 'gps_lon']), None)
+            # Recherche des colonnes GPS AiM (ex: GPS_Lat, GPS_Lon, Latitude, Longitude, etc.)
+            lat_col = next((c for c in df.columns if 'lat' in c.lower()), None)
+            lon_col = next((c for c in df.columns if 'lon' in c.lower() or 'long' in c.lower()), None)
             
             if lat_col and lon_col and gps_df is None:
-                gps_df = df[[lat_col, lon_col]].dropna()
-                gps_df.columns = ['lat', 'lon']
+                # Nettoyage des coordonnées GPS si présentes
+                temp_gps = df[[lat_col, lon_col]].dropna()
+                temp_gps.columns = ['lat', 'lon']
+                # Filtrage basique pour s'assurer que ce ne sont pas des zéros
+                gps_df = temp_gps[(temp_gps['lat'] != 0) & (temp_gps['lon'] != 0)]
             
             summary = f"\n--- Fichier {file.name} ---\nColonnes: {list(df.columns)}\n"
             summary += df.describe(include='all').to_string()
@@ -74,7 +99,7 @@ with col_gps:
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     else:
-        st.info("📍 Trace GPS (Téléverse un CSV avec des coordonnées)")
+        st.info("📍 Trace GPS")
 
 st.divider()
 
