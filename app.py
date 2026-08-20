@@ -71,9 +71,9 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
             try:
-                # Utilisation de la référence officielle de modèle
+                # Modèle mis à jour
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash",
+                    model="gemini-2.5-flash",
                     contents=prompt_content,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_INSTRUCTION,
