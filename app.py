@@ -44,32 +44,42 @@ if uploaded_files:
     data_summary = "\n".join(summaries)
 
 SYSTEM_INSTRUCTION = """
-Tu es un Ingénieur Télémétrie expert en sports mécaniques.
-Analyse les données CSV transmises (vitesse GPS, ouverture TPS, régimes moteur, TCS, temps au tour, etc.)
-et donne des conseils précis au pilote pour optimiser ses chronos.
+Tu es un Ingénieur Télémétrie et Data Coach expert en sports mécaniques.
+Tu réponds au pilote de manière concise, technique et pertinente.
+Si des fichiers CSV de télémétrie sont fournis, tu les analyses en détail.
+Si aucun fichier n'est téléversé, tu échanges normalement avec le pilote sur les réglages, le pilotage ou la télémétrie.
 """
 
 st.subheader("Analyse & Discussion")
 
+# Affichage de l'historique
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if user_prompt := st.chat_input("Pose ta question sur tes données de télémétrie..."):
+# Entrée utilisateur
+if user_prompt := st.chat_input("Pose ta question sur tes données de télémétrie ou ton pilotage..."):
     st.chat_message("user").markdown(user_prompt)
     st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
-    full_prompt = f"Données actuelles :\n{data_summary}\n\nQuestion : {user_prompt}"
+    # Adaptation du prompt selon la présence de données CSV
+    if data_summary:
+        full_prompt = f"Données de télémétrie actuelles :\n{data_summary}\n\nQuestion du pilote : {user_prompt}"
+    else:
+        full_prompt = user_prompt
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=full_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.2,
+            try:
+                response = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.2,
+                    )
                 )
-            )
-            st.markdown(response.text)
-            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                st.markdown(response.text)
+                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"Erreur d'analyse : {e}")
