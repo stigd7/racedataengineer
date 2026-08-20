@@ -1,22 +1,23 @@
 import os
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 from google import genai
 from google.genai import types
 
 st.set_page_config(page_title="Telemetry Engineer AI", layout="wide")
-st.title("🏎️ Track Telemetry AI Assistant")
 
-# Récupération de la clé API depuis Streamlit Secrets
+# Récupération de la clé API
 api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
-
 if not api_key:
     st.error("⚠️ Clé API Gemini manquante. Ajoute GEMINI_API_KEY dans les Secrets Streamlit.")
     st.stop()
 
-# Initialisation du client officiel Google GenAI
 client = genai.Client(api_key=api_key)
 
+# ---------------------------------------------------------
+# Sidebar : Téléversement
+# ---------------------------------------------------------
 st.sidebar.header("Données de télémétrie")
 uploaded_files = st.sidebar.file_uploader(
     "Téléverse tes CSV (Télémétrie / Secteurs)",
@@ -24,18 +25,23 @@ uploaded_files = st.sidebar.file_uploader(
     accept_multiple_files=True
 )
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
 data_summary = ""
+gps_df = None
+
 if uploaded_files:
     st.sidebar.success(f"{len(uploaded_files)} fichier(s) chargé(s)")
     summaries = []
     for file in uploaded_files:
         try:
             df = pd.read_csv(file)
-            st.write(f"**Aperçu : {file.name}**")
-            st.dataframe(df.head(3))
+            
+            # Recherche automatique des colonnes GPS
+            lat_col = next((c for c in df.columns if c.lower() in ['lat', 'latitude', 'gps_lat']), None)
+            lon_col = next((c for c in df.columns if c.lower() in ['lon', 'long', 'longitude', 'gps_lon']), None)
+            
+            if lat_col and lon_col and gps_df is None:
+                gps_df = df[[lat_col, lon_col]].dropna()
+                gps_df.columns = ['lat', 'lon']
             
             summary = f"\n--- Fichier {file.name} ---\nColonnes: {list(df.columns)}\n"
             summary += df.describe(include='all').to_string()
@@ -44,6 +50,37 @@ if uploaded_files:
             st.error(f"Erreur lors de la lecture de {file.name}: {e}")
     data_summary = "\n".join(summaries)
 
+# ---------------------------------------------------------
+# En-tête : Titre (5/6) + Carte GPS (1/6)
+# ---------------------------------------------------------
+col_title, col_gps = st.columns([5, 1])
+
+with col_title:
+    st.title("🏎️ Track Telemetry AI Assistant")
+    st.caption("Analyse de télémétrie & Data Coaching")
+
+with col_gps:
+    if gps_df is not None and not gps_df.empty:
+        fig = px.line_mapbox(
+            gps_df, 
+            lat="lat", 
+            lon="lon", 
+            zoom=13, 
+            height=180
+        )
+        fig.update_layout(
+            mapbox_style="carto-darkmatter",
+            margin={"r":0, "t":0, "l":0, "b":0}
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info("📍 Trace GPS (Téléverse un CSV avec des coordonnées)")
+
+st.divider()
+
+# ---------------------------------------------------------
+# Section Analyse & Chat
+# ---------------------------------------------------------
 SYSTEM_INSTRUCTION = """
 Tu es un Ingénieur Télémétrie et Data Coach expert en sports mécaniques.
 Tu réponds au pilote de manière concise, technique et pertinente.
@@ -53,25 +90,22 @@ Si aucun fichier n'est téléversé, tu échanges normalement avec le pilote sur
 
 st.subheader("Analyse & Discussion")
 
-# Affichage de l'historique
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Entrée utilisateur
 if user_prompt := st.chat_input("Pose ta question sur tes données de télémétrie ou ton pilotage..."):
     st.chat_message("user").markdown(user_prompt)
     st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
-    if data_summary:
-        prompt_content = f"Données de télémétrie actuelles :\n{data_summary}\n\nQuestion du pilote : {user_prompt}"
-    else:
-        prompt_content = user_prompt
+    prompt_content = f"Données de télémétrie actuelles :\n{data_summary}\n\nQuestion du pilote : {user_prompt}" if data_summary else user_prompt
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
             try:
-                # Modèle mis à jour
                 response = client.models.generate_content(
                     model="gemini-3.6-flash",
                     contents=prompt_content,
