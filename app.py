@@ -62,18 +62,19 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
     st.chat_message("user").markdown(user_prompt)
     st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
-    # Adaptation du prompt selon la présence de données CSV
+    # Construction du prompt selon la présence de CSV
     if data_summary:
-        full_prompt = f"Données de télémétrie actuelles :\n{data_summary}\n\nQuestion du pilote : {user_prompt}"
+        prompt_content = f"Données de télémétrie actuelles :\n{data_summary}\n\nQuestion du pilote : {user_prompt}"
     else:
-        full_prompt = user_prompt
+        prompt_content = user_prompt
 
     with st.chat_message("assistant"):
         with st.spinner("Analyse Gemini en cours..."):
             try:
+                # Utilisation du modèle gemini-2.0-flash
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=full_prompt,
+                    model="gemini-2.0-flash",
+                    contents=prompt_content,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_INSTRUCTION,
                         temperature=0.2,
@@ -82,4 +83,17 @@ if user_prompt := st.chat_input("Pose ta question sur tes données de télémét
                 st.markdown(response.text)
                 st.session_state.chat_history.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error(f"Erreur d'analyse : {e}")
+                # Fallback sur gemini-1.5-flash si le v2 n'est pas disponible sur ta clé
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-1.5-flash",
+                        contents=prompt_content,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_INSTRUCTION,
+                            temperature=0.2,
+                        )
+                    )
+                    st.markdown(response.text)
+                    st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                except Exception as err:
+                    st.error(f"Erreur d'analyse : {err}")
